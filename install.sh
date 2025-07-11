@@ -115,7 +115,7 @@ run_setup() {
     
     # Download and execute directly (no temp files)
     print_status "Downloading main installation script..."
-    if ! curl -fsSL https://raw.githubusercontent.com/sindoweb/laravel-claude-code-setup/main/scripts/setup-claude-laravel.sh | bash; then
+    if ! curl -fsSL https://raw.githubusercontent.com/laraben/laravel-claude-code-setup/main/scripts/setup-claude-laravel.sh | bash; then
         print_error "Failed to download or execute installation script"
         print_error "Please check your internet connection and try again"
         exit 1
