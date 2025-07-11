@@ -2127,9 +2127,9 @@ EOF
 
 # Main installation function
 main() {
-        echo "======================================"
-    echo "Laravel Claude Code Setup Script v2.0"
-    echo "======================================"
+    echo "========================================="
+    echo "= Laravel Claude Code Setup Script v2.1 ="
+    echo "========================================="
     echo ""
     
     # Store the original directory
@@ -2164,10 +2164,14 @@ main() {
     
     install_github
     cd "$ORIGINAL_DIR"
-    
+
+    print_status "This should be the gitlab install..."
+
     install_gitlab
     cd "$ORIGINAL_DIR"
-    
+
+    print_status "Did that work?"
+
     install_memory
     cd "$ORIGINAL_DIR"
     
