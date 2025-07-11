@@ -334,7 +334,7 @@ collect_tokens() {
     collect_gitlab_token
     
     # Call Figma collection
-    collect_figma_token
+    # collect_figma_token
 }
 
 
