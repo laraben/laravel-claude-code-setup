@@ -8,6 +8,7 @@ Installs and configures Claude Code with a complete development ecosystem:
 
 ### 🌐 Global MCP Servers (shared across all projects)
 - ✅ **GitHub integration** - Access all your repositories, manage PRs (with automatic token configuration!)
+- ✅ **GitLab integration** - Access all your repositories, manage PRs (with automatic token configuration!)
 - ✅ **Memory system** - Remember decisions across all projects
 - ✅ **Context7** - Latest Laravel/PHP documentation access
 - ✅ **Web fetch** - Access external APIs and resources
