@@ -8,6 +8,7 @@ Installs and configures Claude Code with a complete development ecosystem:
 
 ### 🌐 Global MCP Servers (shared across all projects)
 - ✅ **GitHub integration** - Access all your repositories, manage PRs (with automatic token configuration!)
+- ✅ **GitLab integration** - Access all your repositories, manage MRs, issues, and projects (with automatic token configuration!)
 - ✅ **Memory system** - Remember decisions across all projects
 - ✅ **Context7** - Latest Laravel/PHP documentation access
 - ✅ **Web fetch** - Access external APIs and resources
@@ -42,6 +43,7 @@ If you want to skip the interactive prompts:
 
 ```bash
 export GITHUB_TOKEN="your_github_personal_access_token"
+export GITLAB_TOKEN="your_gitlab_personal_access_token"
 export FIGMA_ACCESS_TOKEN="your_figma_access_token"
 curl -fsSL https://raw.githubusercontent.com/laraben/laravel-claude-code-setup/main/install.sh | bash
 ```
@@ -70,7 +72,8 @@ Before running the installer, make sure you have:
 3. **Go 1.22+** installed (for database MCP server)
 4. **A Laravel project** with `.env` file configured
 5. **GitHub Personal Access Token** (the installer will guide you)
-6. **Figma Personal Access Token** (optional, for design integration)
+6. **GitLab Personal Access Token** (optional, for GitLab integration)
+7. **Figma Personal Access Token** (optional, for design integration)
 
 ## 🔑 Token Setup
 
@@ -85,6 +88,21 @@ You'll need a GitHub Personal Access Token for private repository access:
    - ✅ `read:user` (Read user profile data)
    - ✅ `user:email` (Access user email addresses)
 4. Copy the generated token when prompted by the installer
+
+### GitLab Token Setup (Optional)
+
+For GitLab integration and private repository access:
+
+1. Go to [GitLab Settings → Access Tokens](https://gitlab.com/-/profile/personal_access_tokens)
+2. Click "Add new token"
+3. Give it a descriptive name (e.g., "Claude Code MCP")
+4. Select these scopes:
+   - ✅ `api` (Complete API access)
+   - ✅ `read_user` (Read user profile data)
+   - ✅ `read_repository` (Read repository data)
+5. Set an expiration date (optional)
+6. Click "Create personal access token"
+7. Copy the generated token when prompted by the installer
 
 ### 🎨 Figma Token Setup (Optional)
 
@@ -116,6 +134,12 @@ Then test everything works:
 - "Show me open pull requests"
 - "What's the current branch status?"
 
+### 🦊 GitLab Integration
+- "Show me recent commits from my GitLab project"
+- "List open merge requests"
+- "What issues are assigned to me?"
+- "Create a new merge request"
+
 ### 🎨 Figma Design Integration
 - "Analyze this Figma design: https://www.figma.com/design/ABC123/MyProject"
 - "Convert this Figma button component to a Livewire component"
@@ -143,10 +167,11 @@ The script intelligently manages global vs project-specific resources:
 
 ### Global MCP Servers (installed once, shared by all projects)
 1. **GitHub MCP Server** - Repository access across all projects
-2. **Memory MCP Server** - Shared knowledge base
-3. **Context7** - Documentation access 
-4. **Web Fetch** - External API access
-5. **Figma MCP Server** - Design file access and analysis
+2. **GitLab MCP Server** - GitLab project access and management
+3. **Memory MCP Server** - Shared knowledge base
+4. **Context7** - Documentation access 
+5. **Web Fetch** - External API access
+6. **Figma MCP Server** - Design file access and analysis
 
 ### Project-Specific MCP Servers (per Laravel project)
 1. **Filesystem MCP Server** - Access to your project files
