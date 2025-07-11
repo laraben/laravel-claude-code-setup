@@ -3,7 +3,7 @@
 # Laravel Claude Code Setup Script
 # Automatically configures Claude Code with MCP servers for Laravel development
 # Author: Laravel Developer
-# Version: 2.0 - Figma integration added
+# Version: 2.1 - GitLab integration added
 
 set -e  # Exit on any error
 
@@ -330,8 +330,179 @@ collect_tokens() {
     fi
     echo ""
 
+    # Call GitLab collection
+    collect_gitlab_token
+    
     # Call Figma collection
     collect_figma_token
+}
+
+
+# Collect GitLab API token
+collect_gitlab_token() {
+    print_status "Checking GitLab API configuration..."
+    echo ""
+    
+    # Check if GITLAB_TOKEN is already set in environment
+    if [ -n "$GITLAB_TOKEN" ]; then
+        print_success "Using GITLAB_TOKEN from environment: ${GITLAB_TOKEN:0:8}..."
+        GITLAB_AUTH_METHOD="token"
+        
+        # Ask if user wants to update token
+        if can_interact_with_user; then
+            echo ""
+            local update_gitlab_token
+            if read_from_user "Do you want to update this GitLab token? (y/n): " update_gitlab_token; then
+                if [ "$update_gitlab_token" = "y" ] || [ "$update_gitlab_token" = "yes" ]; then
+                    GITLAB_TOKEN=""  # Clear the token to prompt for a new one
+                    print_status "Please provide the new GitLab token..."
+                    
+                    # Actually prompt for the new token
+                    local new_gitlab_token
+                    if read_from_user "Enter your new GitLab Personal Access Token: " new_gitlab_token; then
+                        if [ ! -z "$new_gitlab_token" ]; then
+                            GITLAB_TOKEN="$new_gitlab_token"
+                            print_success "GitLab token updated successfully!"
+                        else
+                            print_warning "No token provided - keeping original token"
+                        fi
+                    else
+                        print_status "Could not read new token - keeping original"
+                    fi
+                else
+                    print_status "Keeping existing GitLab token"
+                fi
+            else
+                print_status "Could not read input - keeping existing token"
+            fi
+        else
+            print_status "Non-interactive environment - keeping existing GitLab token"
+        fi
+    fi
+    
+    # Check if token is configured in Claude config file
+    CONFIG_FILE="$HOME/.claude.json"
+    if [ -z "$GITLAB_TOKEN" ] && [ -f "$CONFIG_FILE" ]; then
+        # Check for existing token in global config
+        EXISTING_GITLAB_TOKEN=""
+        if command -v jq &> /dev/null; then
+            EXISTING_GITLAB_TOKEN=$(jq -r '.mcpServers.gitlab.env.GITLAB_PERSONAL_ACCESS_TOKEN // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+        fi
+        
+        if [ ! -z "$EXISTING_GITLAB_TOKEN" ] && [ "$EXISTING_GITLAB_TOKEN" != "null" ] && [ "$EXISTING_GITLAB_TOKEN" != "empty" ]; then
+            print_success "Found existing GitLab token in Claude config: ${EXISTING_GITLAB_TOKEN:0:8}..."
+            GITLAB_TOKEN="$EXISTING_GITLAB_TOKEN"
+            GITLAB_AUTH_METHOD="token"
+            
+            # Ask if user wants to update token
+            if can_interact_with_user; then
+                echo ""
+                local update_existing_gitlab
+                if read_from_user "Do you want to update this GitLab token? (y/n): " update_existing_gitlab; then
+                    if [ "$update_existing_gitlab" = "y" ] || [ "$update_existing_gitlab" = "yes" ]; then
+                        print_status "Please provide the new GitLab token..."
+                        
+                        # Actually prompt for the new token
+                        local new_gitlab_token
+                        if read_from_user "Enter your new GitLab Personal Access Token: " new_gitlab_token; then
+                            if [ ! -z "$new_gitlab_token" ]; then
+                                GITLAB_TOKEN="$new_gitlab_token"
+                                print_success "GitLab token updated successfully!"
+                            else
+                                print_warning "No token provided - keeping existing token"
+                            fi
+                        else
+                            print_status "Could not read new token - keeping existing"
+                        fi
+                    else
+                        print_status "Keeping existing GitLab token"
+                    fi
+                else
+                    print_status "Could not read input - keeping existing token"
+                fi
+            else
+                print_status "Non-interactive environment - keeping existing GitLab token"
+            fi
+        fi
+    fi
+    
+    # If no token found, ask about configuration
+    if [ -z "$GITLAB_TOKEN" ]; then
+        if can_interact_with_user; then
+            # Ask if user wants to configure GitLab
+            echo ""
+            print_status "GitLab MCP integration provides access to your GitLab projects, issues, and merge requests."
+            
+            local configure_gitlab
+            if read_from_user "Do you want to configure GitLab integration? (y/n): " configure_gitlab; then
+                if [ "$configure_gitlab" = "y" ] || [ "$configure_gitlab" = "yes" ]; then
+                    GITLAB_AUTH_METHOD="token"
+                    local attempts=0
+                    while [ -z "$GITLAB_TOKEN" ] && [ $attempts -lt 3 ]; do
+                        echo ""
+                        print_status "To create a GitLab Personal Access Token:"
+                        echo "1. Go to GitLab.com → Settings → Access Tokens"
+                        echo "2. Create a new token with scopes: api, read_user, read_repository"
+                        echo "3. Copy the generated token"
+                        echo ""
+                        
+                        local gitlab_token
+                        if read_from_user "Enter your GitLab Personal Access Token (or 'skip'): " gitlab_token; then
+                            if [ "$gitlab_token" = "skip" ]; then
+                                GITLAB_TOKEN=""
+                                GITLAB_AUTH_METHOD="none"
+                                print_warning "Skipping GitLab MCP integration"
+                                break
+                            elif [ ! -z "$gitlab_token" ]; then
+                                GITLAB_TOKEN="$gitlab_token"
+                                print_success "GitLab token configured!"
+                                break
+                            else
+                                print_warning "Token is required for GitLab MCP integration!"
+                                attempts=$((attempts + 1))
+                            fi
+                        else
+                            print_status "Could not read input - skipping GitLab integration"
+                            GITLAB_AUTH_METHOD="none"
+                            break
+                        fi
+                    done
+                else
+                    print_status "Skipping GitLab integration"
+                    GITLAB_AUTH_METHOD="none"
+                fi
+            else
+                print_status "Could not read input - skipping GitLab integration"
+                GITLAB_AUTH_METHOD="none"
+            fi
+        else
+            print_status "Non-interactive environment - skipping GitLab configuration"
+            print_status "To enable GitLab integration later, set GITLAB_TOKEN environment variable"
+            GITLAB_AUTH_METHOD="none"
+        fi
+    fi
+    
+    # Get GitLab API URL (optional, defaults to gitlab.com)
+    if [ ! -z "$GITLAB_TOKEN" ]; then
+        GITLAB_API_URL=${GITLAB_API_URL:-"https://gitlab.com/api/v4"}
+        
+        if can_interact_with_user; then
+            echo ""
+            local custom_gitlab_url
+            if read_from_user "GitLab API URL [default: https://gitlab.com/api/v4]: " custom_gitlab_url; then
+                if [ ! -z "$custom_gitlab_url" ]; then
+                    GITLAB_API_URL="$custom_gitlab_url"
+                fi
+            fi
+        fi
+        
+        print_success "GitLab authentication configured!"
+        print_status "API URL: $GITLAB_API_URL"
+        print_status "Token: ${GITLAB_TOKEN:0:8}..."
+    fi
+    echo ""
+    
+    return 0
 }
 
 
@@ -502,6 +673,149 @@ install_figma() {
     
     print_success "Figma MCP Server ready for configuration!"
     return 0
+}
+
+# Configure GitLab MCP server
+configure_gitlab_mcp() {
+    if [ -z "$GITLAB_TOKEN" ] || [ "$GITLAB_AUTH_METHOD" = "none" ]; then
+        print_status "Skipping GitLab MCP configuration (no token provided)"
+        return 0
+    fi
+    
+    print_status "Configuring GitLab MCP server..."
+    
+    # Configure GitLab MCP server (global)
+    if ! claude mcp list 2>/dev/null | grep -q "^gitlab:"; then
+        print_status "Adding global GitLab MCP server..."
+        
+        # Build the command with environment variables
+        local gitlab_cmd="claude mcp add gitlab npx @zereight/mcp-gitlab"
+        
+        # Set environment variables for the command
+        export GITLAB_PERSONAL_ACCESS_TOKEN="$GITLAB_TOKEN"
+        export GITLAB_API_URL="$GITLAB_API_URL"
+        
+        if $gitlab_cmd; then
+            print_success "Global GitLab MCP server added"
+        else
+            print_warning "Failed to add GitLab MCP server via CLI, trying config file method..."
+            
+            # Fallback: update config file directly
+            if update_gitlab_token_in_config "$GITLAB_TOKEN" "$GITLAB_API_URL"; then
+                print_success "GitLab MCP server configured via config file"
+            else
+                print_warning "⚠️  Could not configure GitLab MCP automatically"
+                print_status "You can configure it manually later by running:"
+                echo "  export GITLAB_PERSONAL_ACCESS_TOKEN=\"$GITLAB_TOKEN\""
+                echo "  export GITLAB_API_URL=\"$GITLAB_API_URL\""
+                echo "  claude mcp add gitlab npx @zereight/mcp-gitlab"
+                return 0  # Don't fail the entire installation
+            fi
+        fi
+    else
+        print_success "Global GitLab MCP server already configured"
+        
+        # Update token if provided
+        CONFIG_FILE="$HOME/.claude.json"
+        if [ -f "$CONFIG_FILE" ]; then
+            # Check if token needs updating
+            CURRENT_GITLAB_TOKEN=""
+            if command -v jq &> /dev/null; then
+                CURRENT_GITLAB_TOKEN=$(jq -r '.mcpServers.gitlab.env.GITLAB_PERSONAL_ACCESS_TOKEN // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+            fi
+            
+            if [ "$CURRENT_GITLAB_TOKEN" != "$GITLAB_TOKEN" ]; then
+                print_status "Updating GitLab token in existing configuration..."
+                if update_gitlab_token_in_config "$GITLAB_TOKEN" "$GITLAB_API_URL"; then
+                    print_success "GitLab token updated successfully!"
+                else
+                    print_warning "Please manually update your GitLab token in ~/.claude.json"
+                fi
+            else
+                print_status "GitLab token already up to date"
+            fi
+        fi
+    fi
+    
+    return 0
+}
+
+# Helper function to update GitLab token in config
+update_gitlab_token_in_config() {
+    local CONFIG_FILE="$HOME/.claude.json"
+    local TOKEN="$1"
+    local API_URL="$2"
+    
+    if [ ! -f "$CONFIG_FILE" ]; then
+        print_warning "Claude config file not found at $CONFIG_FILE"
+        return 1
+    fi
+    
+    # Create a backup
+    cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
+    
+    # Try jq first (cleanest method)
+    if command -v jq &> /dev/null; then
+        # Update GitLab MCP server config
+        if jq --arg token "$TOKEN" --arg apiUrl "$API_URL" \
+           '# Update or create GitLab MCP server config
+            .mcpServers."gitlab" = {
+              "command": "npx",
+              "args": ["@zereight/mcp-gitlab"],
+              "env": {
+                "GITLAB_PERSONAL_ACCESS_TOKEN": $token,
+                "GITLAB_API_URL": $apiUrl
+              }
+            }' \
+           "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"; then
+            print_success "GitLab token configured using jq!"
+            return 0
+        fi
+    fi
+    
+    # Try Python (more reliable than sed)
+    if command -v python3 &> /dev/null; then
+        cat > /tmp/update_gitlab_token.py << PYTHON_EOF
+#!/usr/bin/env python3
+import json
+import sys
+
+try:
+    with open('$CONFIG_FILE', 'r') as f:
+        config = json.load(f)
+    
+    # Ensure mcpServers exists
+    if 'mcpServers' not in config:
+        config['mcpServers'] = {}
+    
+    # Add or update GitLab MCP server
+    config['mcpServers']['gitlab'] = {
+        "command": "npx",
+        "args": ["@zereight/mcp-gitlab"],
+        "env": {
+            "GITLAB_PERSONAL_ACCESS_TOKEN": "$TOKEN",
+            "GITLAB_API_URL": "$API_URL"
+        }
+    }
+    
+    with open('$CONFIG_FILE', 'w') as f:
+        json.dump(config, f, indent=2)
+    print("SUCCESS")
+except Exception as e:
+    print(f"ERROR: {e}")
+PYTHON_EOF
+        
+        RESULT=$(python3 /tmp/update_gitlab_token.py 2>&1)
+        rm -f /tmp/update_gitlab_token.py
+        
+        if [ "$RESULT" = "SUCCESS" ]; then
+            print_success "GitLab token configured using Python!"
+            return 0
+        fi
+    fi
+    
+    print_warning "Could not automatically configure GitLab token"
+    return 1
 }
 
 # Helper function to update Figma token in config
@@ -826,6 +1140,15 @@ install_github() {
     print_success "GitHub MCP Server installed!"
 }
 
+# Install GitLab MCP Server
+install_gitlab() {
+    print_status "Installing GitLab MCP Server..."
+    
+    npm install -g @zereight/mcp-gitlab
+    
+    print_success "GitLab MCP Server installed!"
+}
+
 # Install Memory MCP Server
 install_memory() {
     print_status "Installing Memory MCP Server..."
@@ -1122,6 +1445,9 @@ configure_claude_mcp() {
         fi
     fi
 
+    # Add GitLab configuration after other global servers
+    configure_gitlab_mcp
+
     # Add Figma configuration after other global servers
     configure_figma_mcp
 
@@ -1233,7 +1559,7 @@ configure_claude_mcp() {
     print_status "MCP Server Configuration Summary:"
     echo ""
     print_status "Global MCP servers (shared across all projects):"
-    claude mcp list | grep -E "^(github|memory|context7|webfetch|figma):" | sed 's/^/  ✅ /' || true
+    claude mcp list | grep -E "^(github|gitlab|memory|context7|webfetch|figma):" | sed 's/^/  ✅ /' || true
     echo ""
     print_status "Project-specific MCP servers for $PROJECT_NAME:"
     claude mcp list | grep -E "^(filesystem|database|debugbar)-$PROJECT_ID" | sed 's/^/  ✅ /' || true
@@ -1343,6 +1669,7 @@ You have access to the following MCP servers:
 - **Database**: Query and modify database directly
 - **Memory**: Remember project decisions and patterns
 - **GitHub**: Manage repository operations
+- **GitLab**: Manage GitLab projects, merge requests, and issues
 - **Web Fetch**: Access external resources
 - **Figma**: Access Figma designs, components, and design tokens (if configured)
 
@@ -1578,6 +1905,7 @@ You have access to the following MCP servers:
 - **Database**: Query and modify database directly
 - **Memory**: Remember project decisions and patterns
 - **GitHub**: Manage repository operations
+- **GitLab**: Manage GitLab projects, merge requests, and issues
 - **Web Fetch**: Access external resources
 - **Figma**: Access Figma designs, components, and design tokens (if configured)
 
@@ -1837,6 +2165,9 @@ main() {
     install_github
     cd "$ORIGINAL_DIR"
     
+    install_gitlab
+    cd "$ORIGINAL_DIR"
+    
     install_memory
     cd "$ORIGINAL_DIR"
     
@@ -1917,7 +2248,7 @@ main() {
     echo ""
     
     # Count successful MCP servers
-    GLOBAL_MCP_COUNT=$(claude mcp list | grep -E "^(github|memory|context7|webfetch|figma):" | wc -l | tr -d ' ')
+    GLOBAL_MCP_COUNT=$(claude mcp list | grep -E "^(github|gitlab|memory|context7|webfetch|figma):" | wc -l | tr -d ' ')
     PROJECT_MCP_COUNT=$(claude mcp list | grep -E "^(filesystem|database|debugbar)-$PROJECT_ID" | wc -l | tr -d ' ')
     TOTAL_MCP_COUNT=$(claude mcp list | wc -l | tr -d ' ')
     
