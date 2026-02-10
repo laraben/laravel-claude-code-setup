@@ -667,42 +667,16 @@ create_mcp_directory() {
 # Install Context7 MCP Server
 install_context7() {
     print_status "Installing Context7 MCP Server..."
-    
-    cd "$MCP_DIR"
-    
-    # Clean install if directory exists
-    if [ -d "context7" ]; then
-        print_status "Removing existing context7 installation..."
-        rm -rf context7
-    fi
-    
-    print_status "Cloning Context7 repository..."
-    if ! git clone https://github.com/upstash/context7.git context7; then
-        print_error "Failed to clone Context7 repository"
+
+    # Context7 is available as an npm package and can be run via npx
+    # No need to clone and build from source (the repo is a pnpm monorepo
+    # with workspace:* dependencies that fail with npm install)
+    if ! command -v npx &> /dev/null; then
+        print_warning "npx is required for Context7 MCP but not found!"
         return 1
     fi
-    
-    cd context7
-    
-    print_status "Installing Context7 dependencies..."
-    if ! npm install; then
-        print_error "Failed to install Context7 dependencies"
-        return 1
-    fi
-    
-    print_status "Building Context7..."
-    if ! npm run build; then
-        print_error "Failed to build Context7"
-        return 1
-    fi
-    
-    # Verify the build was successful (Context7 builds to dist/index.js, not build/index.js)
-    if [ -f "dist/index.js" ]; then
-        print_success "Context7 MCP Server installed and built successfully!"
-    else
-        print_error "Context7 build failed - dist/index.js not found"
-        return 1
-    fi
+
+    print_success "Context7 MCP Server ready for configuration (via npx)!"
 }
 
 # Install Filesystem MCP Server
@@ -1158,18 +1132,16 @@ configure_claude_mcp() {
         print_success "Global Memory MCP server already configured"
     fi
     
-    # Add global Context7 MCP server
-    if [ -f "$MCP_DIR/context7/dist/index.js" ]; then
-        if ! claude mcp list 2>/dev/null | grep -q "^context7:"; then
-            print_status "Adding global Context7 MCP server..."
-            if claude mcp add "context7" node "$MCP_DIR/context7/dist/index.js"; then
-                print_success "Global Context7 MCP server added"
-            else
-                print_warning "Failed to add global Context7 MCP server"
-            fi
+    # Add global Context7 MCP server (via npx)
+    if ! claude mcp list 2>/dev/null | grep -q "^context7:"; then
+        print_status "Adding global Context7 MCP server..."
+        if claude mcp add "context7" npx @upstash/context7-mcp@latest; then
+            print_success "Global Context7 MCP server added"
         else
-            print_success "Global Context7 MCP server already configured"
+            print_warning "Failed to add global Context7 MCP server"
         fi
+    else
+        print_success "Global Context7 MCP server already configured"
     fi
     
     # Add global Web Fetch MCP server
